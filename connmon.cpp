@@ -349,7 +349,7 @@ void processPacket(const Packet& pkt)
     double prtd=0;
     if(!no_pping) {
         if (!filtLocal || (localIP != ipdstr)) {
-            addTS(std::to_string(rcv_tsval) + "+" + fstr, capTm);
+            addTS(std::to_string(rcv_tsval)+ "+" + fstr, capTm);
         }
         double t = getTStm(std::to_string(rcv_tsecr) + "+" + dststr + "+" + srcstr);
           if (t > 0.0) {
@@ -391,8 +391,6 @@ void processPacket(const Packet& pkt)
     }
     //seqno get incremented for SYNs and FINs
     fr->lastSeq = ((t_tcp->flags() & TCP::SYN) || (t_tcp->flags() & TCP::FIN)) ? seqno+1 : seqno;
-    fr->lastPay = payLen;
-    fr->lastTm = capTm;
     
     //look for duplicate ACKs, compute spacing
     std::string dupDiff = "   -    ";
@@ -406,6 +404,8 @@ void processPacket(const Packet& pkt)
         if(d > 0.)
             dp = true;
     }
+    fr->lastPay = payLen;
+    fr->lastTm = capTm;
     fr->lastAck = ackno;
     
     if(!pd && !sd && !ds && !dp)
