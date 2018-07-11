@@ -72,7 +72,7 @@
     flow in the form:  srcIP:port+dstIP:port
  
  Note that connmon produces more output than pping, close to one line per packet so a
- "quick" version (flag -Q) has been added that only prints lines when there is an RTD
+ "quick" version (flag -Q) has been added that only prints lines when there is a RTD
  to print.
  For continued live use, output may be redirected to a file or
  piped to a display or summarization widget (see github.com/line2Chunk).
@@ -301,6 +301,8 @@ void processPacket(const Packet& pkt)
     srcstr = ipsstr + ":" + std::to_string(t_tcp->sport());
     dststr = ipdstr + ":" + std::to_string(t_tcp->dport());
     std::string fstr = srcstr + "+" + dststr;  // could add DSCP field to key
+    bool pd, sd, ds, dp;             //set true if there's a value to print
+    pd = sd = ds = dp = false;
     // Creates a flowRec entry whenever needed
     flowRec* fr;
     if (flows.count(fstr) == 0u) {
@@ -344,24 +346,17 @@ void processPacket(const Packet& pkt)
     }
 
     //pping code
-    std::string rtdPP = "******";
-    if(machineReadable)
-        rtdPP = "********";
+    double prtd=0;
     if(!no_pping) {
         if (!filtLocal || (localIP != ipdstr)) {
-            addTS(fstr + "+" + std::to_string(rcv_tsval), capTm);
+            addTS(std::to_string(rcv_tsval) + "+" + fstr, capTm);
         }
-        double t = getTStm(dststr + "+" + srcstr + "+" +
-                         std::to_string(rcv_tsecr));
+        double t = getTStm(std::to_string(rcv_tsecr) + "+" + dststr + "+" + srcstr);
           if (t > 0.0) {
             // this packet is the return "pping" --
             // process it for packet's src
-            double rtt = capTm - t;
-            if(machineReadable) {
-                rtdPP = std::to_string(rtt); //to_string is 6 digit precision
-            } else {
-                rtdPP = fmtTimeDiff(rtt);
-            }
+            prtd = capTm - t;
+            pd = true;
         }
     }
     
@@ -369,25 +364,18 @@ void processPacket(const Packet& pkt)
     // only save time of outbound data packets, only test inbound pure ACKs
     // [need to check the arithmetic to roll over]
     uint32_t seqno = t_tcp->seq(), ackno = t_tcp->ack_seq();
-    std::string rtdSeq = "******";
-    if(machineReadable)
-        rtdSeq = "********";
+    double srtd=0;
     if (!filtLocal || (localIP != ipdstr)) {
         if(fr->revFlow && payLen > 0) {
             uint32_t nxt = seqno + payLen;
             addSeq(std::to_string(nxt) + "+" + fstr, capTm);
         }
-        if(fr->revFlow && payLen == 0 && t_tcp->flags() & TCP::ACK) {
+        if(fr->revFlow && (payLen == 0 || ackno != fr->lastAck) && t_tcp->flags() & TCP::ACK) {
             double t = getSeqTm(std::to_string(ackno) + "+" + dststr + "+" + srcstr);
             if (t > 0.0) {
-                // this packet is the return ack --
-                // process it for packet's src
-                double rtt = capTm - t;
-                if(machineReadable) {
-                    rtdSeq = std::to_string(rtt); //to_string is 6 digit precision
-                } else {
-                    rtdSeq = fmtTimeDiff(rtt);
-                }
+                // this packet is the return ack from packet src --
+                srtd = capTm - t;
+                sd = true;
             }
         }
     }
@@ -398,6 +386,8 @@ void processPacket(const Packet& pkt)
     int dseq = 0;
     if(fr->lastSeq) {
         dseq = seqno - (fr->lastSeq + fr->lastPay);
+        if(dseq > 0)
+            ds = true;
     }
     //seqno get incremented for SYNs and FINs
     fr->lastSeq = ((t_tcp->flags() & TCP::SYN) || (t_tcp->flags() & TCP::FIN)) ? seqno+1 : seqno;
@@ -407,39 +397,58 @@ void processPacket(const Packet& pkt)
     //look for duplicate ACKs, compute spacing
     std::string dupDiff = "   -    ";
     if(t_tcp->flags() == TCP::ACK && payLen == 0 && ackno == fr->lastAck) {
+        double d = capTm - fr->lastTm;
         if(machineReadable) {
-            dupDiff = std::to_string(capTm - fr->lastTm);
+            dupDiff = std::to_string(d);
         } else {
-            dupDiff = fmtTimeDiff(capTm - fr->lastTm);
+            dupDiff = fmtTimeDiff(d);
         }
+        if(d > 0.)
+            dp = true;
     }
     fr->lastAck = ackno;
     
-    //this seems awkward, maybe a bool for whether there is an rtdPP, an rtdSeq?
-    if(quick && (rtdPP == "******" || rtdPP == "********") && (rtdSeq == "******" || rtdSeq == "********"))
+    if(!pd && !sd && !ds && !dp)
+        return;
+    //if only printing rtd vals and aren't any, return
+    if(quick && !pd && !sd)
         return;
     
     /*
-     * prints capTm and rtdPP in appropriate formats,rtdSeq
+     * prints capTm and prtd in appropriate formats,srtd
      *  difference of seqno from expected value => expected=0, hole>0, out-of-order<0
      *  duplicate ACK field - for not a dup ACK, otherwise seconds since original ACK
-     *  number of bytes in this packet
+     *  number of payload bytes in this packet
      *  number of bytes sent on this flow so far, last is flowname
      */
     if (machineReadable) {
-        printf("%" PRId64 ".%06d %6s",
-               int64_t(capTm + offTm), int((capTm - floor(capTm)) * 1e6),
-               rtdPP.c_str());
+        printf("%" PRId64 ".%06d",
+               int64_t(capTm + offTm), int((capTm - floor(capTm)) * 1e6));
+        if(pd)
+            printf(" %8.6f", prtd);
+        else
+            printf("    *    ");
+        if(sd)
+            printf(" %8.6f", srtd);
+        else
+            printf("    *    ");
     } else {
         char tbuff[80];
         struct tm* ptm = std::localtime(&result);
         strftime(tbuff, 80, "%T", ptm);
-        printf("%s %6s", tbuff, rtdPP.c_str());
+        printf("%s", tbuff);
+        if(pd)
+            printf(" %6s", fmtTimeDiff(prtd).c_str());
+        else
+            printf("   *   ");
+        if(sd)
+            printf(" %6s", fmtTimeDiff(srtd).c_str());
+        else
+            printf("   *   ");
     }
-    printf(" %8s", rtdSeq.c_str());
     printf(" %4d", dseq);
     printf(" %8s", dupDiff.c_str());
-    printf(" %4d", pktLen);         //just for testing
+    printf(" %4d", payLen);
     printf(" %7.0f", fr->bytesSnt);
     printf(" %s\n", fstr.c_str());
     int64_t now = clock_now();

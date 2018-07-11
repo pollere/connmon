@@ -37,9 +37,17 @@ from the Internet).
     Bytes seen so far in this flow
     flow in the form:  srcIP:port+dstIP:port
 
-The seqno-based RTD is the round trip delay from the capture point to the destination host
-of the flow. The sequence space holes and out-of-order packets that influence those delays
-are printed out with the reverse flow, but the duplicate acks will be with the RTDs.
+Sequence space holes and out-of-orders are between the sending host and the capture point;
+if a loss occurs downstream of the CP, it won't be seen. Duplicate acks are seen regardless
+of where the CP is along the path and might indicate lost packets on the reverse flow.
+
+When run on (or very close) to a host that is mainly receiving packets from a remote server
+(e.g., watching a video), the host will be primarily sending "pure" acks (no data). The 
+seqno derived RTDs will show very small values but the TSval-derived ppings will oscillate
+between values that line up with the seqno RTT and larger values (on the order of the time
+between data packets). A flag to disregard ppings where the source packet is a pure ack may
+be added in the future. Since the seqno of the pure acks is not advancing, those packets
+will not be useful to create seqno rtd samples.
  
  Note that connmon produces more output than pping, close to one line per packet so a
  "quick" version (flag -Q) has been added that only prints lines when there is an RTD
