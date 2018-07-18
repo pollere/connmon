@@ -49,11 +49,15 @@ between data packets). A flag to disregard ppings where the source packet is a p
 be added in the future. Since the seqno of the pure acks is not advancing, those packets
 will not be useful to create seqno rtd samples.
  
- Note that connmon produces more output than pping, close to one line per packet so a
+ _Notes_
+    connmon produces more output than pping, close to one line per packet so a
  "quick" version (flag -Q) has been added that only prints lines when there is an RTD
  to print.
- For continued live use, output may be redirected to a file or
+    For continued live use, output may be redirected to a file or
  piped to a display or summarization widget (see github.com/line2Chunk).
+    connmon can read from a pcapfile insead of a live interface and has an "emulation"
+ mode (-e option) that outputs the lines at roughly real time
+
 
 
 ## Compiling ##

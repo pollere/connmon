@@ -609,7 +609,7 @@ int main(int argc, char* const* argv)
         help(argv[0]);
         exit(1);
     }
-    for (int c; (c = getopt_long(argc, argv, "i:r:e:f:c:s:d:hlmqvQ",
+    for (int c; (c = getopt_long(argc, argv, "i:r:f:c:s:d:hlemqvQ",
                                  opts, nullptr)) != -1; ) {
         switch (c) {
             case 'i': liveInp = true; fname = optarg; break;
