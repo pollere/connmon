@@ -31,10 +31,8 @@
  Usage:
  connmon -i interfacename
  or
- connmon -r pcapfilename [-e]
+ connmon -r pcapfilename
  
- When reading from a pcap file emulation mode can be invoked with -e to approximate
- the output timing as if it were live input.
  Typing connmon without arguments gives a list of available optional arguments.
  
  Monitors the packet stream and extracts available information, including the pping
@@ -98,8 +96,6 @@
 #include <unordered_map>
 #include <utility>
 #include <cmath>
-#include <thread>
-#include <chrono>
 #include "tins/tins.h"
 
 using namespace Tins;
@@ -140,7 +136,7 @@ static int64_t offTm = -1;      // first packet capture time (used to
 // avoid precision loss when 52 bit timestamp
 // normalized into FP double 47 bit mantissa)
 static bool machineReadable = false; // machine or human readable output
-static double capTm, startm, lstTm;        // (in seconds)
+static double capTm, startm;        // (in seconds)
 static int pktCnt, not_tcp, no_TS, not_v4or6, uniDir;
 static std::string localIP;         // ignore pp through this address
 static bool filtLocal = true;
@@ -291,7 +287,7 @@ void processPacket(const Packet& pkt)
         offTm = static_cast<int64_t>(pkt.timestamp().seconds());
         // fractional part of first usable packet time
         startm = double(pkt.timestamp().microseconds()) * 1e-6;
-        capTm = lstTm = startm;
+        capTm = startm;
         if (sumInt) {
             std::cerr << "First packet at "
             << std::asctime(std::localtime(&result)) << "\n";
@@ -536,6 +532,7 @@ static void printSummary()
 static struct option opts[] = {
     { "interface", required_argument, nullptr, 'i' },
     { "read",      required_argument, nullptr, 'r' },
+    { "emulate",   required_argument, nullptr, 'e' },
     { "filter",    required_argument, nullptr, 'f' },
     { "count",     required_argument, nullptr, 'c' },
     { "seconds",   required_argument, nullptr, 's' },
@@ -561,8 +558,6 @@ static void help(const char* pname) {
     "  -i|--interface ifname   do live capture from interface <ifname>\n"
     "\n"
     "  -r|--read pcap     process capture file <pcap>\n"
-    "\n"
-    "  -e     emulate real-time used only with -r\n"
     "\n"
     "  -f|--filter expr   pcap filter applied to packets.\n"
     "                     Eg., \"-f 'net 74.125.0.0/16 or 45.57.0.0/17'\"\n"
@@ -603,18 +598,16 @@ static void help(const char* pname) {
 int main(int argc, char* const* argv)
 {
     bool liveInp = false;
-    bool emulateRT = false;
     std::string fname;
     if (argc <= 1) {
         help(argv[0]);
         exit(1);
     }
-    for (int c; (c = getopt_long(argc, argv, "i:r:f:c:s:d:hlemqvQ",
+    for (int c; (c = getopt_long(argc, argv, "i:r:f:c:s:d:hlmqvQ",
                                  opts, nullptr)) != -1; ) {
         switch (c) {
             case 'i': liveInp = true; fname = optarg; break;
             case 'r': fname = optarg; break;
-            case 'e': if(!liveInp) emulateRT = true; break;
             case 'f': filter += " and (" + std::string(optarg) + ")"; break;
             case 'c': maxPackets = atof(optarg); break;
             case 's': time_to_run = atof(optarg); break;
@@ -671,11 +664,6 @@ int main(int argc, char* const* argv)
     
     for (const auto& packet : *snif) {
         processPacket(packet);
-        if(emulateRT) {
-            unsigned int us = 1000000 * (capTm - lstTm);
-            std::this_thread::sleep_for (std::chrono::microseconds(us));
-            lstTm = capTm;
-        }
         
         if ((time_to_run > 0. && capTm - startm >= time_to_run) ||
             (maxPackets > 0 && pktCnt >= maxPackets)) {
