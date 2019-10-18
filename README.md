@@ -12,7 +12,7 @@ receiver or anywhere on a connection's path (for example, an OpenWrt
 home border router could easily monitor the RTT of all traffic to and
 from the Internet).
 
- connmon is provided as sample code for a basic tcp connection
+ connmon is provided as reference code for a basic tcp connection
  monitor. It is NOT intended as production code.
  connmon operates on TCP headers, v4 or v6. It requires the
  following:

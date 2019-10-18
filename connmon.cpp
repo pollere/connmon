@@ -46,7 +46,7 @@
  is a duplicate ACK, and the number of bytes in the packet payload. Round trip delays
  are those the captured packets experience between the packet capture point to a host.
  
- connmon is provided as sample code for a basic tcp connection
+ connmon is provided as reference code for a basic tcp connection
  monitor. It is NOT intended as production code.
  
  connmon operates on TCP headers, v4 or v6. It requires the
